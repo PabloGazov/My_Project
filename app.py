@@ -5,14 +5,21 @@ import pandas as pd
 # ================== DATA ==================
 
 routes = {
-    "България → Германия": ["София", "Белград", "Виена", "Мюнхен"]
+    "България → Германия": ["София", "Белград", "Виена", "Мюнхен"],
+    "България → Италия": ["София", "Скопие", "Рим", "Милано"],
+    "България → Франция": ["София", "Будапеща", "Виена", "Париж"]
 }
 
 city_info = {
     "София": {"hotel": 70, "food": 20, "tour": 15},
     "Белград": {"hotel": 65, "food": 22, "tour": 18},
     "Виена": {"hotel": 90, "food": 30, "tour": 25},
-    "Мюнхен": {"hotel": 95, "food": 28, "tour": 22}
+    "Мюнхен": {"hotel": 95, "food": 28, "tour": 22},
+    "Скопие": {"hotel": 60, "food": 18, "tour": 14},
+    "Рим": {"hotel": 100, "food": 35, "tour": 30},
+    "Милано": {"hotel": 95, "food": 32, "tour": 26},
+    "Будапеща": {"hotel": 75, "food": 24, "tour": 20},
+    "Париж": {"hotel": 110, "food": 40, "tour": 35}
 }
 
 DISTANCE_BETWEEN_CITIES = 300
@@ -92,27 +99,25 @@ class Plane(Transport):
 
 # ================== UI ==================
 
-st.title("🌍 Туристически планер (Strategy + Charts)")
+st.title("🌍 Международен туристически планер")
 
 route_choice = st.selectbox("Маршрут:", list(routes.keys()))
 transport_choice = st.selectbox("Превоз:", ["Кола", "Влак", "Самолет"])
 pricing_choice = st.selectbox("Тип пътуване:", ["Бюджетно", "Стандартно", "Луксозно"])
 
-days = st.slider("Общо дни:", 2, 12, 6)
-budget = st.number_input("Бюджет (лв):", 500, 6000, 2000)
+days = st.slider("Общо дни:", 3, 15, 7)
+budget = st.number_input("Бюджет (лв):", 500, 9000, 2500)
 
 guided_tours = st.checkbox("🎟️ Организирани турове")
 insurance = st.checkbox("🛡️ Пътническа застраховка")
 
 # ================== STRATEGY SELECTION ==================
 
-strategies = {
+pricing_strategy = {
     "Бюджетно": BudgetStrategy(),
     "Стандартно": StandardStrategy(),
     "Луксозно": LuxuryStrategy()
-}
-
-pricing_strategy = strategies[pricing_choice]
+}[pricing_choice]
 
 # ================== ACTION ==================
 
@@ -137,8 +142,8 @@ if st.button("Планирай 🧭"):
         tour_cost = info["tour"] * days_per_city if guided_tours else 0
 
         city_total = hotel_cost + food_cost + tour_cost
-
         city_costs[city] = city_total
+
         total_hotel += hotel_cost
         total_food += food_cost
         total_tour += tour_cost
@@ -156,12 +161,10 @@ if st.button("Планирай 🧭"):
         insurance_cost
     )
 
-    # ================== RESULTS ==================
+    # ================== CHARTS ==================
 
-    st.subheader("💰 Разходи по категории")
-
+    st.subheader("📊 Разходи по категории")
     category_df = pd.DataFrame({
-        "Категория": ["Хотели", "Храна", "Турове", "Транспорт", "Застраховка"],
         "Цена (лв)": [
             total_hotel,
             total_food,
@@ -169,12 +172,11 @@ if st.button("Планирай 🧭"):
             transport_cost,
             insurance_cost
         ]
-    }).set_index("Категория")
+    }, index=["Хотели", "Храна", "Турове", "Транспорт", "Застраховка"])
 
     st.bar_chart(category_df)
 
     st.subheader("🏙️ Разходи по градове")
-
     city_df = pd.DataFrame.from_dict(
         city_costs,
         orient="index",
@@ -183,8 +185,10 @@ if st.button("Планирай 🧭"):
 
     st.bar_chart(city_df)
 
+    # ================== FINAL ==================
+
     st.markdown("---")
-    st.write(f"## 💵 Общо: **{total_cost:.2f} лв**")
+    st.write(f"## 💰 Обща сума: **{total_cost:.2f} лв**")
 
     if total_cost <= budget:
         st.success("✅ Бюджетът е достатъчен!")
