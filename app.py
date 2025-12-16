@@ -1,30 +1,59 @@
 import streamlit as st
 from abc import ABC, abstractmethod
+import pandas as pd
 
 # ================== DATA ==================
 
 routes = {
-    "България → Германия": ["София", "Белград", "Виена", "Мюнхен"],
-    "България → Италия": ["София", "Скопие", "Рим", "Милано"],
-    "България → Франция": ["София", "Будапеща", "Виена", "Париж"]
+    "България → Германия": ["София", "Белград", "Виена", "Мюнхен"]
 }
 
 city_info = {
-    "София": {"hotel": 70, "food": 20, "sight": "Александър Невски", "tour": 15},
-    "Белград": {"hotel": 65, "food": 22, "sight": "Калемегдан", "tour": 18},
-    "Виена": {"hotel": 90, "food": 30, "sight": "Шьонбрун", "tour": 25},
-    "Мюнхен": {"hotel": 95, "food": 28, "sight": "Мариенплац", "tour": 22},
-    "Скопие": {"hotel": 60, "food": 18, "sight": "Старият базар", "tour": 14},
-    "Рим": {"hotel": 100, "food": 35, "sight": "Колизеумът", "tour": 30},
-    "Милано": {"hotel": 95, "food": 32, "sight": "Катедралата Дуомо", "tour": 26},
-    "Будапеща": {"hotel": 75, "food": 24, "sight": "Парламентът", "tour": 20},
-    "Париж": {"hotel": 110, "food": 40, "sight": "Айфеловата кула", "tour": 35}
+    "София": {"hotel": 70, "food": 20, "tour": 15},
+    "Белград": {"hotel": 65, "food": 22, "tour": 18},
+    "Виена": {"hotel": 90, "food": 30, "tour": 25},
+    "Мюнхен": {"hotel": 95, "food": 28, "tour": 22}
 }
 
 DISTANCE_BETWEEN_CITIES = 300
 INSURANCE_PER_DAY = 8
 
-# ================== OOP ==================
+# ================== STRATEGY PATTERN ==================
+
+class PricingStrategy(ABC):
+    @abstractmethod
+    def calculate_hotel(self, base_price, days):
+        pass
+
+    @abstractmethod
+    def calculate_food(self, base_price, days):
+        pass
+
+
+class BudgetStrategy(PricingStrategy):
+    def calculate_hotel(self, base_price, days):
+        return base_price * 0.8 * days
+
+    def calculate_food(self, base_price, days):
+        return base_price * 0.8 * days
+
+
+class StandardStrategy(PricingStrategy):
+    def calculate_hotel(self, base_price, days):
+        return base_price * days
+
+    def calculate_food(self, base_price, days):
+        return base_price * days
+
+
+class LuxuryStrategy(PricingStrategy):
+    def calculate_hotel(self, base_price, days):
+        return base_price * 1.3 * days
+
+    def calculate_food(self, base_price, days):
+        return base_price * 1.4 * days
+
+# ================== TRANSPORT ==================
 
 class Transport(ABC):
     def __init__(self, price_per_km):
@@ -63,85 +92,99 @@ class Plane(Transport):
 
 # ================== UI ==================
 
-st.title("🌍 Разширен туристически планер")
+st.title("🌍 Туристически планер (Strategy + Charts)")
 
 route_choice = st.selectbox("Маршрут:", list(routes.keys()))
 transport_choice = st.selectbox("Превоз:", ["Кола", "Влак", "Самолет"])
-trip_type = st.selectbox("Тип пътуване:", ["Бюджетно", "Стандартно", "Луксозно"])
-season = st.selectbox("Сезон:", ["Пролет", "Лято", "Зима"])
+pricing_choice = st.selectbox("Тип пътуване:", ["Бюджетно", "Стандартно", "Луксозно"])
 
-days = st.slider("Общо дни:", 2, 14, 7)
-budget = st.number_input("Бюджет (лв):", 300, 8000, 2000)
+days = st.slider("Общо дни:", 2, 12, 6)
+budget = st.number_input("Бюджет (лв):", 500, 6000, 2000)
 
 guided_tours = st.checkbox("🎟️ Организирани турове")
 insurance = st.checkbox("🛡️ Пътническа застраховка")
 
-# ================== MULTIPLIERS ==================
+# ================== STRATEGY SELECTION ==================
 
-trip_multipliers = {
-    "Бюджетно": (0.8, 0.8),
-    "Стандартно": (1.0, 1.0),
-    "Луксозно": (1.3, 1.4)
+strategies = {
+    "Бюджетно": BudgetStrategy(),
+    "Стандартно": StandardStrategy(),
+    "Луксозно": LuxuryStrategy()
 }
 
-season_multiplier = {
-    "Пролет": 1.0,
-    "Лято": 1.2,
-    "Зима": 0.9
-}
-
-hotel_mult, food_mult = trip_multipliers[trip_type]
-season_mult = season_multiplier[season]
+pricing_strategy = strategies[pricing_choice]
 
 # ================== ACTION ==================
 
 if st.button("Планирай 🧭"):
     cities = routes[route_choice]
     days_per_city = days // len(cities)
-    remaining_days = days % len(cities)
 
-    transport = {"Кола": Car(), "Влак": Train(), "Самолет": Plane()}[transport_choice]
+    transport = {
+        "Кола": Car(),
+        "Влак": Train(),
+        "Самолет": Plane()
+    }[transport_choice]
 
-    total_cost = 0
+    total_hotel = total_food = total_tour = 0
+    city_costs = {}
 
-    st.subheader("🏙️ Детайли по градове")
-
-    for index, city in enumerate(cities):
-        stay_days = days_per_city + (1 if index == len(cities) - 1 else 0) + remaining_days
+    for city in cities:
         info = city_info[city]
 
-        hotel_cost = info["hotel"] * hotel_mult * season_mult * stay_days
-        food_cost = info["food"] * food_mult * season_mult * stay_days
-        tour_cost = info["tour"] * stay_days if guided_tours else 0
+        hotel_cost = pricing_strategy.calculate_hotel(info["hotel"], days_per_city)
+        food_cost = pricing_strategy.calculate_food(info["food"], days_per_city)
+        tour_cost = info["tour"] * days_per_city if guided_tours else 0
 
         city_total = hotel_cost + food_cost + tour_cost
-        total_cost += city_total
 
-        st.markdown(f"### 📍 {city} ({stay_days} дни)")
-        st.write(f"🏨 Хотел: {hotel_cost:.2f} лв")
-        st.write(f"🍽️ Храна: {food_cost:.2f} лв")
-        if guided_tours:
-            st.write(f"🎟️ Турове: {tour_cost:.2f} лв")
-        st.write(f"➡️ Общо за града: **{city_total:.2f} лв**")
+        city_costs[city] = city_total
+        total_hotel += hotel_cost
+        total_food += food_cost
+        total_tour += tour_cost
 
     distance = DISTANCE_BETWEEN_CITIES * (len(cities) - 1)
     transport_cost = transport.travel_cost(distance)
-    total_cost += transport_cost
 
-    if insurance:
-        insurance_cost = INSURANCE_PER_DAY * days
-        total_cost += insurance_cost
-        st.write(f"🛡️ Застраховка: {insurance_cost:.2f} лв")
+    insurance_cost = INSURANCE_PER_DAY * days if insurance else 0
 
-    st.subheader("📊 Обобщение")
-    st.write(f"Маршрут: {route_choice}")
-    st.write(f"Превоз: {transport.name()}")
-    st.write(f"Тип пътуване: {trip_type}")
-    st.write(f"Сезон: {season}")
-    st.write(f"🚗 Транспорт: {transport_cost:.2f} лв")
+    total_cost = (
+        total_hotel +
+        total_food +
+        total_tour +
+        transport_cost +
+        insurance_cost
+    )
+
+    # ================== RESULTS ==================
+
+    st.subheader("💰 Разходи по категории")
+
+    category_df = pd.DataFrame({
+        "Категория": ["Хотели", "Храна", "Турове", "Транспорт", "Застраховка"],
+        "Цена (лв)": [
+            total_hotel,
+            total_food,
+            total_tour,
+            transport_cost,
+            insurance_cost
+        ]
+    }).set_index("Категория")
+
+    st.bar_chart(category_df)
+
+    st.subheader("🏙️ Разходи по градове")
+
+    city_df = pd.DataFrame.from_dict(
+        city_costs,
+        orient="index",
+        columns=["Цена (лв)"]
+    )
+
+    st.bar_chart(city_df)
 
     st.markdown("---")
-    st.write(f"## 💰 Крайна сума: **{total_cost:.2f} лв**")
+    st.write(f"## 💵 Общо: **{total_cost:.2f} лв**")
 
     if total_cost <= budget:
         st.success("✅ Бюджетът е достатъчен!")
